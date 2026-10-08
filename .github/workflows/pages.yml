@@ -34,6 +34,20 @@ jobs:
                   dest = root.joinpath(*path.parts)
                   dest.parent.mkdir(parents=True, exist_ok=True)
                   dest.write_bytes(archive.read(item))
+          for package in sorted(pathlib.Path(".").glob("mynda pakki *.zip")):
+              with zipfile.ZipFile(package) as archive:
+                  for item in archive.infolist():
+                      path = pathlib.PurePosixPath(item.filename)
+                      if item.is_dir() or path.is_absolute() or ".." in path.parts:
+                          continue
+                      if any(part.startswith(".") or part == "__MACOSX" for part in path.parts):
+                          continue
+                      dest = root / "myndir" / path.name
+                      dest.parent.mkdir(parents=True, exist_ok=True)
+                      data = archive.read(item)
+                      if dest.exists() and dest.read_bytes() != data:
+                          raise ValueError("Conflicting image: " + path.name)
+                      dest.write_bytes(data)
           if pathlib.Path("myndir").is_dir():
               shutil.copytree("myndir", root / "myndir", dirs_exist_ok=True)
           for page in root.rglob("*.html"):
