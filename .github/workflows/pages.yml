@@ -1,0 +1,53 @@
+name: Publish website
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare website
+        run: |
+          python3 - <<'PY'
+          import pathlib, zipfile, shutil
+          root = pathlib.Path("_site")
+          root.mkdir()
+          with zipfile.ZipFile("verkefni-7.zip") as archive:
+              for item in archive.infolist():
+                  path = pathlib.PurePosixPath(item.filename)
+                  if item.is_dir() or path.is_absolute() or ".." in path.parts:
+                      continue
+                  if any(part.startswith(".") or part == "__MACOSX" for part in path.parts):
+                      continue
+                  dest = root.joinpath(*path.parts)
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  dest.write_bytes(archive.read(item))
+          if pathlib.Path("myndir").is_dir():
+              shutil.copytree("myndir", root / "myndir", dirs_exist_ok=True)
+          for page in root.rglob("*.html"):
+              home = "index.html" if page.parent.name == "verkefni 7" else "../verkefni 7/index.html"
+              text = page.read_text(encoding="utf-8")
+              text = text.replace('href="7.html"', 'href="' + home + '"')
+              page.write_text(text, encoding="utf-8")
+          (root / "index.html").write_text('<!doctype html><html lang="is"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=verkefni%207/index.html"><title>Young Thug</title></head><body><a href="verkefni%207/index.html">Opna Young Thug vefinn</a></body></html>', encoding="utf-8")
+          (root / ".nojekyll").touch()
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
